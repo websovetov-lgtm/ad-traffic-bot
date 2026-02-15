@@ -1,8 +1,9 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import logging
 import os
+import asyncio
 from datetime import datetime
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 # Налаштування логування
 logging.basicConfig(
@@ -12,10 +13,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Конфігурація
-BOT_TOKEN = "8406711319:AAFbS0fNyOyRHdo_Ub3zZXU92E5I-6gqZmU"
-WEB_APP_URL = "https://storied-daffodil-9cfeac.netlify.app"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8406711319:AAFbS0fNyOyRHdo_Ub3zZXU92E5I-6gqZmU")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://storied-daffodil-9cfeac.netlify.app")
 
-# База даних в пам'яті (для простоти)
+# База даних в пам'яті
 users_db = {}
 
 def get_user(user_id):
@@ -37,15 +38,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_data = get_user(user.id)
     
-    # Перевірка реферального коду
+    # Реферальний код
     if context.args and len(context.args) > 0:
         try:
             referrer_id = int(context.args[0])
             if referrer_id != user.id and referrer_id in users_db:
                 user_data['referrer_id'] = referrer_id
                 users_db[referrer_id]['referrals'].append(user.id)
-                logger.info(f"User {user.id} registered via referral from {referrer_id}")
-        except ValueError:
+        except:
             pass
     
     keyboard = [
@@ -70,7 +70,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📺 За рекламу: 0.01₴
 👥 Реферальна програма: 20%
 
-Натисни кнопку "Грати" щоб почати! 👇
+Натисни "Грати" щоб почати! 👇
 """
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
@@ -92,14 +92,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📺 Реклам переглянуто: **{user_data['ads_watched']}**
 🖱 Кліків зроблено: **{user_data['clicks']}**
 """
-        
         keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     
     elif query.data == "stats":
-        # Топ-5 користувачів
         top_users = sorted(users_db.items(), key=lambda x: x[1]['total_earned'], reverse=True)[:5]
         
         stats_text = "📊 **Топ-5 користувачів**\n\n"
@@ -108,7 +105,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_info = await context.bot.get_chat(uid)
                 name = user_info.first_name
             except:
-                name = "Unknown"
+                name = "User"
             
             emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
             stats_text += f"{emoji} {name} - {data['total_earned']:.3f}₴\n"
@@ -117,12 +114,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
     
     elif query.data == "referral":
         ref_count = len(user_data['referrals'])
-        ref_earnings = sum(users_db[rid]['total_earned'] * 0.2 for rid in user_data['referrals'] if rid in users_db)
         ref_link = f"https://t.me/{context.bot.username}?start={user_id}"
         
         text = f"""
@@ -132,20 +127,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 📊 Твоя статистика:
 - Рефералів: **{ref_count}**
-- Заробив з рефералів: **{ref_earnings:.3f}₴**
 
 🔗 Твоє посилання:
 `{ref_link}`
 
 Надішли це посилання друзям! 👆
 """
-        
         keyboard = [
-            [InlineKeyboardButton("📤 Поділитись", url=f"https://t.me/share/url?url={ref_link}&text=Заробляй на перегляді реклами!")],
+            [InlineKeyboardButton("📤 Поділитись", url=f"https://t.me/share/url?url={ref_link}&text=Заробляй переглядаючи рекламу!")],
             [InlineKeyboardButton("◀️ Назад", callback_data="back")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     
     elif query.data == "info":
@@ -164,10 +156,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 📞 **Підтримка:** @YOUR_USERNAME
 """
-        
         keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     
     elif query.data == "back":
@@ -183,7 +173,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text("Головне меню 👇", reply_markup=reply_markup)
 
 async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -191,31 +180,37 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = update.effective_message.web_app_data.data
         user_id = update.effective_user.id
-        user_data = get_user(user_id)
-        
-        # Парсимо дані (можна використати JSON)
-        logger.info(f"Received WebApp data from {user_id}: {data}")
-        
-        # Тут можна обробляти дані з гри
-        # Наприклад, синхронізувати баланс
-        
+        logger.info(f"WebApp data from {user_id}: {data}")
         await update.message.reply_text("✅ Дані отримано!")
     except Exception as e:
-        logger.error(f"Error processing WebApp data: {e}")
+        logger.error(f"Error: {e}")
 
 def main():
     """Головна функція"""
-    # Створюємо додаток
+    logger.info("Starting bot...")
+    
+    # Створення application
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Додаємо обробники
+    # Додавання обробників
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data))
     
-    # Запускаємо бота
-    logger.info("Bot started!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Bot started successfully!")
+    
+    # Запуск
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
 
 if __name__ == '__main__':
+    # Виправлення для Python 3.14+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
     main()
