@@ -200,15 +200,8 @@ def start_http_server():
     server = HTTPServer(('0.0.0.0', PORT), HealthCheckHandler)
     logger.info(f"HTTP server started on port {PORT}")
     server.serve_forever()
-
-def main():
-    """Головна функція"""
-    logger.info("Starting bot...")
-    
-    # Запуск HTTP сервера в окремому потоці
-    http_thread = Thread(target=start_http_server, daemon=True)
-    http_thread.start()
-    
+async def run_bot():
+    """Запуск бота"""
     # Створення application
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -220,11 +213,26 @@ def main():
     logger.info("Bot started successfully!")
     
     # Запуск бота
-    application.run_polling(
+    await application.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True
     )
 
+def main():
+    """Головна функція"""
+    import asyncio
+    
+    logger.info("Starting bot...")
+    
+    # Запуск HTTP сервера в окремому потоці
+    http_thread = Thread(target=start_http_server, daemon=True)
+    http_thread.start()
+    
+    # Запуск бота
+    asyncio.run(run_bot())
+
 if __name__ == '__main__':
     main()
+
+
 
