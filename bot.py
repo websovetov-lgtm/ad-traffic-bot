@@ -6,23 +6,19 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Налаштування логування
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Конфігурація
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8406711319:AAFbS0fNyOyRHdo_Ub3zZXU92E5I-6gqZmU")
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://storied-daffodil-9cfeac.netlify.app")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEB_APP_URL = os.getenv("WEB_APP_URL")
 PORT = int(os.getenv("PORT", 10000))
 
-# База даних в пам'яті
 users_db = {}
 
 def get_user(user_id):
-    """Отримати або створити користувача"""
     if user_id not in users_db:
         users_db[user_id] = {
             'balance': 0.0,
@@ -36,7 +32,6 @@ def get_user(user_id):
     return users_db[user_id]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start"""
     user = update.effective_user
     user_data = get_user(user.id)
     
@@ -77,7 +72,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка кнопок"""
     query = update.callback_query
     await query.answer()
     
@@ -175,7 +169,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Головне меню 👇", reply_markup=reply_markup)
 
 async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка даних з WebApp"""
     try:
         data = update.effective_message.web_app_data.data
         user_id = update.effective_user.id
@@ -184,55 +177,33 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error: {e}")
 
-# HTTP сервер (для keep-alive)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
-        self.send_header('Content-type', 'text/html')
+        self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        self.wfile.write(b'Bot is running!')
+        self.wfile.write(b'OK')
     
     def log_message(self, format, *args):
-        pass  # Вимикаємо логи HTTP
+        pass
 
 def start_http_server():
-    """Запуск HTTP сервера в окремому потоці"""
     server = HTTPServer(('0.0.0.0', PORT), HealthCheckHandler)
     logger.info(f"HTTP server started on port {PORT}")
     server.serve_forever()
-async def run_bot():
-    """Запуск бота"""
-    # Створення application
+
+if __name__ == '__main__':
+    logger.info("Starting bot...")
+    
+    http_thread = Thread(target=start_http_server, daemon=True)
+    http_thread.start()
+    
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Додавання обробників
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data))
     
     logger.info("Bot started successfully!")
     
-    # Запуск бота
-    await application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
-
-def main():
-    """Головна функція"""
-    import asyncio
-    
-    logger.info("Starting bot...")
-    
-    # Запуск HTTP сервера в окремому потоці
-    http_thread = Thread(target=start_http_server, daemon=True)
-    http_thread.start()
-    
-    # Запуск бота
-    asyncio.run(run_bot())
-
-if __name__ == '__main__':
-    main()
-
-
-
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
