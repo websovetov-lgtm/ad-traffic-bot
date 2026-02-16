@@ -1,10 +1,10 @@
 import logging
 import os
-import asyncio
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from aiohttp import web
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Налаштування логування
 logging.basicConfig(
@@ -40,7 +40,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_data = get_user(user.id)
     
-    # Реферальний код
     if context.args and len(context.args) > 0:
         try:
             referrer_id = int(context.args[0])
@@ -155,8 +154,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Клік по монеті: 0.001₴
 • Перегляд реклами: 0.01₴
 • 20% від заробітку рефералів
-
-📞 **Підтримка:** @YOUR_USERNAME
 """
         keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -187,13 +184,30 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error: {e}")
 
-async def health_check(request):
-    """Health check endpoint для keep-alive"""
-    return web.Response(text="Bot is running! 🤖", status=200)
+# HTTP сервер (для keep-alive)
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b'Bot is running! 🤖')
+    
+    def log_message(self, format, *args):
+        pass  # Вимикаємо логи HTTP
 
-async def run_bot():
-    """Запуск бота"""
-    logger.info("Starting Telegram bot...")
+def start_http_server():
+    """Запуск HTTP сервера в окремому потоці"""
+    server = HTTPServer(('0.0.0.0', PORT), HealthCheckHandler)
+    logger.info(f"HTTP server started on port {PORT}")
+    server.serve_forever()
+
+def main():
+    """Головна функція"""
+    logger.info("Starting bot...")
+    
+    # Запуск HTTP сервера в окремому потоці
+    http_thread = Thread(target=start_http_server, daemon=True)
+    http_thread.start()
     
     # Створення application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -206,33 +220,10 @@ async def run_bot():
     logger.info("Bot started successfully!")
     
     # Запуск бота
-    await application.run_polling(
+    application.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True
     )
 
-async def run_web_server():
-    """Запуск веб-сервера"""
-    app = web.Application()
-    app.router.add_get('/', health_check)
-    app.router.add_get('/health', health_check)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-    
-    logger.info(f"HTTP server started on port {PORT}")
-    
-    # Тримаємо сервер запущеним
-    await asyncio.Event().wait()
-
-async def main():
-    """Головна функція - запускає і бота і веб-сервер"""
-    await asyncio.gather(
-        run_web_server(),
-        run_bot()
-    )
-
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
