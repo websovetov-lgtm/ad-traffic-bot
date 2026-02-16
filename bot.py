@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from aiohttp import web
 
 # Налаштування логування
 logging.basicConfig(
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Конфігурація
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8406711319:AAFbS0fNyOyRHdo_Ub3zZXU92E5I-6gqZmU")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://storied-daffodil-9cfeac.netlify.app")
+PORT = int(os.getenv("PORT", 8080))
 
 # База даних в пам'яті
 users_db = {}
@@ -126,7 +128,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎁 Запрошуй друзів і отримуй **20%** від їх заробітку!
 
 📊 Твоя статистика:
-- Рефералів: **{ref_count}**
+• Рефералів: **{ref_count}**
 
 🔗 Твоє посилання:
 `{ref_link}`
@@ -150,9 +152,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 4️⃣ Запрошуй друзів і отримуй бонуси
 
 💰 **Заробіток:**
-- Клік по монеті: 0.001₴
-- Перегляд реклами: 0.01₴
-- 20% від заробітку рефералів
+• Клік по монеті: 0.001₴
+• Перегляд реклами: 0.01₴
+• 20% від заробітку рефералів
 
 📞 **Підтримка:** @YOUR_USERNAME
 """
@@ -185,9 +187,30 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error: {e}")
 
-def main():
+# HTTP сервер для keep-alive
+async def health_check(request):
+    """Health check endpoint"""
+    return web.Response(text="Bot is running! 🤖", status=200)
+
+async def start_http_server():
+    """Запуск HTTP сервера"""
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    
+    logger.info(f"HTTP server started on port {PORT}")
+
+async def main():
     """Головна функція"""
     logger.info("Starting bot...")
+    
+    # Запуск HTTP сервера
+    await start_http_server()
     
     # Створення application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -199,8 +222,8 @@ def main():
     
     logger.info("Bot started successfully!")
     
-    # Запуск
-    application.run_polling(
+    # Запуск бота
+    await application.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True
     )
@@ -213,4 +236,4 @@ if __name__ == '__main__':
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    main()
+    loop.run_until_complete(main())
