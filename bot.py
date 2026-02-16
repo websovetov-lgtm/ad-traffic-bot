@@ -190,7 +190,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b'Bot is running! 🤖')
+        self.wfile.write(b'Bot is running!')
     
     def log_message(self, format, *args):
         pass  # Вимикаємо логи HTTP
@@ -227,3 +227,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
