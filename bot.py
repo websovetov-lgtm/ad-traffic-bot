@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Конфігурація
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8406711319:AAFbS0fNyOyRHdo_Ub3zZXU92E5I-6gqZmU")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://storied-daffodil-9cfeac.netlify.app")
-PORT = int(os.getenv("PORT", 8080))
+PORT = int(os.getenv("PORT", 10000))
 
 # База даних в пам'яті
 users_db = {}
@@ -187,30 +187,13 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error: {e}")
 
-# HTTP сервер для keep-alive
 async def health_check(request):
-    """Health check endpoint"""
+    """Health check endpoint для keep-alive"""
     return web.Response(text="Bot is running! 🤖", status=200)
 
-async def start_http_server():
-    """Запуск HTTP сервера"""
-    app = web.Application()
-    app.router.add_get('/', health_check)
-    app.router.add_get('/health', health_check)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-    
-    logger.info(f"HTTP server started on port {PORT}")
-
-async def main():
-    """Головна функція"""
-    logger.info("Starting bot...")
-    
-    # Запуск HTTP сервера
-    await start_http_server()
+async def run_bot():
+    """Запуск бота"""
+    logger.info("Starting Telegram bot...")
     
     # Створення application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -228,12 +211,28 @@ async def main():
         drop_pending_updates=True
     )
 
-if __name__ == '__main__':
-    # Виправлення для Python 3.14+
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+async def run_web_server():
+    """Запуск веб-сервера"""
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
     
-    loop.run_until_complete(main())
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    
+    logger.info(f"HTTP server started on port {PORT}")
+    
+    # Тримаємо сервер запущеним
+    await asyncio.Event().wait()
+
+async def main():
+    """Головна функція - запускає і бота і веб-сервер"""
+    await asyncio.gather(
+        run_web_server(),
+        run_bot()
+    )
+
+if __name__ == '__main__':
+    asyncio.run(main())
